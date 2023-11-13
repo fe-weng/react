@@ -7,22 +7,34 @@
 
 import {enableIsInputPending} from '../SchedulerFeatureFlags';
 
+// 请求及时回调
 export let requestHostCallback;
+// 取消及时回调
 export let cancelHostCallback;
+// 请求延时回调
 export let requestHostTimeout;
+// 取消延时回调
 export let cancelHostTimeout;
+// 是否让出主线程，让浏览器能够执行其他更高优先级的任务
 export let shouldYieldToHost;
+// 请求绘制
 export let requestPaint;
+// 获取当前时间
 export let getCurrentTime;
+// 强制设置 yieldInterval（让出主线程的周期）
 export let forceFrameRate;
 
+// 判断是否存在 performance 对象 nodejs环境不存在，浏览器环境有
 const hasPerformanceNow =
   typeof performance === 'object' && typeof performance.now === 'function';
 
+// 有的话， getCurrentTime 就用 performance.now()
 if (hasPerformanceNow) {
   const localPerformance = performance;
+  // performance.now 返回的是从性能测试启动的时间 到现在的时间
   getCurrentTime = () => localPerformance.now();
 } else {
+  // 不存在就用 localDate.now() - initialTime 替代
   const localDate = Date;
   const initialTime = localDate.now();
   getCurrentTime = () => localDate.now() - initialTime;
@@ -79,6 +91,7 @@ if (
   const setTimeout = window.setTimeout;
   const clearTimeout = window.clearTimeout;
 
+  // 异常判断
   if (typeof console !== 'undefined') {
     // TODO: Scheduler no longer requires these methods to be polyfilled. But
     // maybe we want to continue warning if they don't exist, to preserve the
@@ -112,6 +125,7 @@ if (
   // thread, like user events. By default, it yields multiple times per frame.
   // It does not attempt to align with frame boundaries, since most tasks don't
   // need to be frame aligned; for those that do, use requestAnimationFrame.
+  // 时间切片周期，如果task的执行时间超过了，就会在下一个task之前，把控制权交还给浏览器
   let yieldInterval = 5;
   let deadline = 0;
 
@@ -126,7 +140,12 @@ if (
     navigator.scheduling !== undefined &&
     navigator.scheduling.isInputPending !== undefined
   ) {
+    // scheduling 浏览器的调度任务
+    // scheduling.isInputPending 是否有输入事件等待处理
+    // scheduling.isFramePending 是否有渲染帧等待执行
+    // scheduling.isDocumentIdle 检查文档是否处于闲置状态
     const scheduling = navigator.scheduling;
+    // 是否让出主线程
     shouldYieldToHost = function() {
       const currentTime = getCurrentTime();
       if (currentTime >= deadline) {
@@ -144,6 +163,8 @@ if (
         }
         // There's no pending input. Only yield if we've reached the max
         // yield interval.
+        // 在持续运行的 react 应用中，currentTime 肯定会大于 maxYieldInterval，只有在初始化阶段才有可能返回false
+        // currentTime 是记录的从启动到当前的时间
         return currentTime >= maxYieldInterval;
       } else {
         // There's still time left in the frame.
@@ -151,6 +172,7 @@ if (
       }
     };
 
+    // 请求绘制
     requestPaint = function() {
       needsPaint = true;
     };
@@ -165,6 +187,7 @@ if (
     requestPaint = function() {};
   }
 
+  // 设置时间切片周期
   forceFrameRate = function(fps) {
     if (fps < 0 || fps > 125) {
       // Using console['error'] to evade Babel and ESLint
@@ -182,25 +205,30 @@ if (
     }
   };
 
+  // 接收 MessageChannel 消息
   const performWorkUntilDeadline = () => {
     if (scheduledHostCallback !== null) {
       const currentTime = getCurrentTime();
       // Yield after `yieldInterval` ms, regardless of where we are in the vsync
       // cycle. This means there's always time remaining at the beginning of
       // the message event.
+      // 更新deadline
       deadline = currentTime + yieldInterval;
       const hasTimeRemaining = true;
       try {
+        // 执行回调函数
         const hasMoreWork = scheduledHostCallback(
           hasTimeRemaining,
           currentTime,
         );
+        // 没有更多任务 就结束调度
         if (!hasMoreWork) {
           isMessageLoopRunning = false;
           scheduledHostCallback = null;
         } else {
           // If there's more work, schedule the next message event at the end
           // of the preceding one.
+          // 有就发起新的调度
           port.postMessage(null);
         }
       } catch (error) {

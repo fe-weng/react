@@ -27,7 +27,9 @@ import {initializeUpdateQueue} from './ReactUpdateQueue.old';
 import {LegacyRoot, BlockingRoot, ConcurrentRoot} from './ReactRootTags';
 
 function FiberRootNode(containerInfo, tag, hydrate) {
+  // 表明的是那种 渲染模式 RootTag 0 | 1 | 2; LegacyRoot, BlockingRoot, ConcurrentRoot
   this.tag = tag;
+  // ReactDOM.render(component, element) 传入的 element
   this.containerInfo = containerInfo;
   this.pendingChildren = null;
   this.current = null;
@@ -86,6 +88,7 @@ export function createFiberRoot(
   hydrate: boolean,
   hydrationCallbacks: null | SuspenseHydrationCallbacks,
 ): FiberRoot {
+  // 创建 fiberRoot
   const root: FiberRoot = (new FiberRootNode(containerInfo, tag, hydrate): any);
   if (enableSuspenseCallback) {
     root.hydrationCallbacks = hydrationCallbacks;
@@ -93,6 +96,7 @@ export function createFiberRoot(
 
   // Cyclic construction. This cheats the type system right now because
   // stateNode is any.
+  // 创建 hostRootFiber 在这一步确定 fiber 节点的 mode
   const uninitializedFiber = createHostRootFiber(tag);
   root.current = uninitializedFiber;
   uninitializedFiber.stateNode = root;

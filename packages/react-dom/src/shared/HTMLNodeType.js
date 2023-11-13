@@ -10,6 +10,7 @@
 /**
  * HTML nodeType values that represent the type of the node
  */
+// HTML 本身的 nodeType 值
 
 export const ELEMENT_NODE = 1;
 export const TEXT_NODE = 3;

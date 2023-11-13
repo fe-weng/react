@@ -246,13 +246,13 @@ const {
 
 type ExecutionContext = number;
 
-export const NoContext = /*             */ 0b0000000;
-const BatchedContext = /*               */ 0b0000001;
-const EventContext = /*                 */ 0b0000010;
-const DiscreteEventContext = /*         */ 0b0000100;
-const LegacyUnbatchedContext = /*       */ 0b0001000;
-const RenderContext = /*                */ 0b0010000;
-const CommitContext = /*                */ 0b0100000;
+export const NoContext = /*             */ 0b0000000; // 0
+const BatchedContext = /*               */ 0b0000001; // 1
+const EventContext = /*                 */ 0b0000010; // 2
+const DiscreteEventContext = /*         */ 0b0000100; // 4
+const LegacyUnbatchedContext = /*       */ 0b0001000; // 8
+const RenderContext = /*                */ 0b0010000; // 16
+const CommitContext = /*                */ 0b0100000; // 32
 export const RetryAfterError = /*       */ 0b1000000;
 
 type RootExitStatus = 0 | 1 | 2 | 3 | 4 | 5;
@@ -264,8 +264,10 @@ const RootSuspendedWithDelay = 4;
 const RootCompleted = 5;
 
 // Describes where we are in the React execution stack
+// 当前 React 的执行栈（执行上下文）
 let executionContext: ExecutionContext = NoContext;
 // The root we're working on
+// 当前 root 节点
 let workInProgressRoot: FiberRoot | null = null;
 // The fiber we're working on
 let workInProgress: Fiber | null = null;
@@ -281,6 +283,7 @@ let workInProgressRootRenderLanes: Lanes = NoLanes;
 // Most things in the work loop should deal with workInProgressRootRenderLanes.
 // Most things in begin/complete phases should deal with subtreeRenderLanes.
 let subtreeRenderLanes: Lanes = NoLanes;
+// 栈结构：用来存储当前节点的 subTreeRenderLanes
 const subtreeRenderLanesCursor: StackCursor<Lanes> = createCursor(NoLanes);
 
 // Whether to root completed, errored, suspended, etc.
@@ -291,11 +294,14 @@ let workInProgressRootFatalError: mixed = null;
 // slightly different than `renderLanes` because `renderLanes` can change as you
 // enter and exit an Offscreen tree. This value is the combination of all render
 // lanes for the entire render phase.
+// 整个 render 期间用到的所有 Lanes
 let workInProgressRootIncludedLanes: Lanes = NoLanes;
 // The work left over by components that were visited during this render. Only
 // includes unprocessed updates, not work in bailed out children.
+// render 期间被跳过的lanes，只包括未处理的 updates,不包过被复用的 fiber 节点
 let workInProgressRootSkippedLanes: Lanes = NoLanes;
 // Lanes that were updated (in an interleaved event) during this render.
+// render 期间被修改过的 lanes
 let workInProgressRootUpdatedLanes: Lanes = NoLanes;
 // Lanes that were pinged (in an interleaved event) during this render.
 let workInProgressRootPingedLanes: Lanes = NoLanes;
@@ -338,6 +344,7 @@ let pendingPassiveProfilerEffects: Array<Fiber> = [];
 let rootsWithPendingDiscreteUpdates: Set<FiberRoot> | null = null;
 
 // Use these to prevent an infinite loop of nested updates
+// 防止无限循环和嵌套更新
 const NESTED_UPDATE_LIMIT = 50;
 let nestedUpdateCount: number = 0;
 let rootWithNestedUpdates: FiberRoot | null = null;
@@ -392,9 +399,12 @@ export function getCurrentTime() {
 export function requestUpdateLane(fiber: Fiber): Lane {
   // Special cases
   const mode = fiber.mode;
+  // mode & BlockingMode，判断在 mode 中，是否包含BlockingMode
   if ((mode & BlockingMode) === NoMode) {
+    // legacy 模式
     return (SyncLane: Lane);
   } else if ((mode & ConcurrentMode) === NoMode) {
+    // blocking 模式
     return getCurrentPriorityLevel() === ImmediateSchedulerPriority
       ? (SyncLane: Lane)
       : (SyncBatchedLane: Lane);
@@ -429,6 +439,7 @@ export function requestUpdateLane(fiber: Fiber): Lane {
   // Our heuristic for that is whenever we enter a concurrent work loop.
   //
   // We'll do the same for `currentEventPendingLanes` below.
+  // concurrent 模式
   if (currentEventWipLanes === NoLanes) {
     currentEventWipLanes = workInProgressRootIncludedLanes;
   }
@@ -519,9 +530,12 @@ export function scheduleUpdateOnFiber(
   lane: Lane,
   eventTime: number,
 ) {
+  // #region 开发阶段的错误提示
   checkForNestedUpdates();
   warnAboutRenderPhaseUpdatesInDEV(fiber);
+  // #endregion
 
+  // 从更新处的 fiber 节点，回溯到根节点 fiberRoot
   const root = markUpdateLaneFromFiberToRoot(fiber, lane);
   if (root === null) {
     warnAboutUpdateOnUnmountedFiberInDEV(fiber);
@@ -531,6 +545,7 @@ export function scheduleUpdateOnFiber(
   // Mark that the root has a pending update.
   markRootUpdated(root, lane, eventTime);
 
+  // 后续更新阶段的判断
   if (root === workInProgressRoot) {
     // Received an update to a tree that's in the middle of rendering. Mark
     // that there was an interleaved update work on this root. Unless the
@@ -564,6 +579,7 @@ export function scheduleUpdateOnFiber(
   if (lane === SyncLane) {
     if (
       // Check if we're inside unbatchedUpdates
+      // legacy 或 blocking 模式
       (executionContext & LegacyUnbatchedContext) !== NoContext &&
       // Check if we're not already rendering
       (executionContext & (RenderContext | CommitContext)) === NoContext
@@ -574,8 +590,10 @@ export function scheduleUpdateOnFiber(
       // This is a legacy edge case. The initial mount of a ReactDOM.render-ed
       // root inside of batchedUpdates should be synchronous, but layout updates
       // should be deferred until the end of the batch.
+      // 直接进行 fiber 构建
       performSyncWorkOnRoot(root);
     } else {
+      // 注册调度任务
       ensureRootIsScheduled(root, eventTime);
       schedulePendingInteractions(root, lane);
       if (executionContext === NoContext) {
@@ -585,6 +603,7 @@ export function scheduleUpdateOnFiber(
         // without immediately flushing it. We only do this for user-initiated
         // updates, to preserve historical behavior of legacy mode.
         resetRenderTimer();
+        // 进行fiber 树构建
         flushSyncCallbackQueue();
       }
     }
@@ -622,6 +641,7 @@ export function scheduleUpdateOnFiber(
 // work without treating it as a typical update that originates from an event;
 // e.g. retrying a Suspense boundary isn't an update, but it does schedule work
 // on a fiber.
+// 协调更新优先级的，从当前节点向上遍历所有节点
 function markUpdateLaneFromFiberToRoot(
   sourceFiber: Fiber,
   lane: Lane,
@@ -641,6 +661,7 @@ function markUpdateLaneFromFiberToRoot(
     }
   }
   // Walk the parent path to the root and update the child expiration time.
+  // 从 sourceFiber 开始，向上遍历所有节点，知道 HostRoot。设置沿途所有节点（包括 alternate）的 childLanes
   let node = sourceFiber;
   let parent = sourceFiber.return;
   while (parent !== null) {
@@ -972,6 +993,7 @@ function performSyncWorkOnRoot(root) {
 
   let lanes;
   let exitStatus;
+  // 更新阶段的判断
   if (
     root === workInProgressRoot &&
     includesSomeLane(root.expiredLanes, workInProgressRootRenderLanes)
@@ -998,7 +1020,9 @@ function performSyncWorkOnRoot(root) {
       exitStatus = renderRootSync(root, lanes);
     }
   } else {
+    // 首次渲染
     lanes = getNextLanes(root, NoLanes);
+    // 构建fiber 树
     exitStatus = renderRootSync(root, lanes);
   }
 
@@ -1105,7 +1129,7 @@ function flushPendingDiscreteUpdates() {
     // immediately flush them.
     const roots = rootsWithPendingDiscreteUpdates;
     rootsWithPendingDiscreteUpdates = null;
-    roots.forEach(root => {
+    roots.forEach((root) => {
       markDiscreteUpdatesExpired(root);
       ensureRootIsScheduled(root, now());
     });
@@ -1114,7 +1138,7 @@ function flushPendingDiscreteUpdates() {
   flushSyncCallbackQueue();
 }
 
-export function batchedUpdates<A, R>(fn: A => R, a: A): R {
+export function batchedUpdates<A, R>(fn: (A) => R, a: A): R {
   const prevExecutionContext = executionContext;
   executionContext |= BatchedContext;
   try {
@@ -1129,7 +1153,7 @@ export function batchedUpdates<A, R>(fn: A => R, a: A): R {
   }
 }
 
-export function batchedEventUpdates<A, R>(fn: A => R, a: A): R {
+export function batchedEventUpdates<A, R>(fn: (A) => R, a: A): R {
   const prevExecutionContext = executionContext;
   executionContext |= EventContext;
   try {
@@ -1190,7 +1214,11 @@ export function discreteUpdates<A, B, C, D, R>(
 
 export function unbatchedUpdates<A, R>(fn: (a: A) => R, a: A): R {
   const prevExecutionContext = executionContext;
+  // executionContext = executionContext & ~BatchedContext
+  // 从 executionContext 中去掉 BatchedContext
   executionContext &= ~BatchedContext;
+  // executionContext = executionContext | LegacyUnbatchedContext
+  // 在 executionContext 中新增 LegacyUnbatchedContext
   executionContext |= LegacyUnbatchedContext;
   try {
     return fn(a);
@@ -1204,7 +1232,7 @@ export function unbatchedUpdates<A, R>(fn: (a: A) => R, a: A): R {
   }
 }
 
-export function flushSync<A, R>(fn: A => R, a: A): R {
+export function flushSync<A, R>(fn: (A) => R, a: A): R {
   const prevExecutionContext = executionContext;
   if ((prevExecutionContext & (RenderContext | CommitContext)) !== NoContext) {
     if (__DEV__) {
@@ -1319,6 +1347,7 @@ function prepareFreshStack(root: FiberRoot, lanes: Lanes) {
     }
   }
   workInProgressRoot = root;
+  // 生成 fiber 树，将 root.current 的 fiber 信息拷贝了一份
   workInProgress = createWorkInProgress(root.current, null);
   workInProgressRootRenderLanes = subtreeRenderLanes = workInProgressRootIncludedLanes = lanes;
   workInProgressRootExitStatus = RootIncomplete;
@@ -1490,11 +1519,14 @@ export function renderHasNotSuspendedYet(): boolean {
 function renderRootSync(root: FiberRoot, lanes: Lanes) {
   const prevExecutionContext = executionContext;
   executionContext |= RenderContext;
+  // 这个是 hook 的
   const prevDispatcher = pushDispatcher();
 
   // If the root or lanes have changed, throw out the existing stack
   // and prepare a fresh one. Otherwise we'll continue where we left off.
+  // 如果 fiberRoot 变动，或者 update.lane 变动，都会刷新帧栈，丢弃上一次渲染进度
   if (workInProgressRoot !== root || workInProgressRootRenderLanes !== lanes) {
+    // 刷新帧栈，lagacy模式下都会进入
     prepareFreshStack(root, lanes);
     startWorkOnPendingInteractions(root, lanes);
   }
@@ -3126,6 +3158,7 @@ if (__DEV__ && replayFailedUnitOfWorkWithInvokeGuardedCallback) {
 
     // Before entering the begin phase, copy the work-in-progress onto a dummy
     // fiber. If beginWork throws, we'll use this to reset the state.
+    // 根据 unitOrWork 重新生成一份 fiber
     const originalWorkInProgressCopy = assignFiberPropertiesInDEV(
       dummyFiber,
       unitOfWork,
@@ -3413,7 +3446,7 @@ function scheduleInteractions(
     const pendingInteractionMap = root.pendingInteractionMap;
     const pendingInteractions = pendingInteractionMap.get(lane);
     if (pendingInteractions != null) {
-      interactions.forEach(interaction => {
+      interactions.forEach((interaction) => {
         if (!pendingInteractions.has(interaction)) {
           // Update the pending async work count for previously unscheduled interaction.
           interaction.__count++;
@@ -3425,7 +3458,7 @@ function scheduleInteractions(
       pendingInteractionMap.set(lane, new Set(interactions));
 
       // Update the pending async work count for the current interactions.
-      interactions.forEach(interaction => {
+      interactions.forEach((interaction) => {
         interaction.__count++;
       });
     }
@@ -3461,7 +3494,7 @@ function startWorkOnPendingInteractions(root: FiberRoot, lanes: Lanes) {
   const interactions: Set<Interaction> = new Set();
   root.pendingInteractionMap.forEach((scheduledInteractions, scheduledLane) => {
     if (includesSomeLane(lanes, scheduledLane)) {
-      scheduledInteractions.forEach(interaction =>
+      scheduledInteractions.forEach((interaction) =>
         interactions.add(interaction),
       );
     }
@@ -3523,7 +3556,7 @@ function finishPendingInteractions(root, committedLanes) {
       if (!includesSomeLane(remainingLanesAfterCommit, lane)) {
         pendingInteractionMap.delete(lane);
 
-        scheduledInteractions.forEach(interaction => {
+        scheduledInteractions.forEach((interaction) => {
           interaction.__count--;
 
           if (subscriber !== null && interaction.__count === 0) {
@@ -3707,7 +3740,7 @@ export function act(callback: () => Thenable<mixed>): Thenable<void> {
               }
             });
           },
-          err => {
+          (err) => {
             onDone();
             reject(err);
           },

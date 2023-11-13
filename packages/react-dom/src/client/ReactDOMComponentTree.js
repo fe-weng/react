@@ -51,6 +51,7 @@ export function precacheFiberNode(
 }
 
 export function markContainerAsRoot(hostRoot: Fiber, node: Container): void {
+  // 这里的这个 hostRoot，是 Fiber 类型，不要和 FiberRoot 搞混了
   node[internalContainerInstanceKey] = hostRoot;
 }
 

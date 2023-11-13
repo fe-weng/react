@@ -41,6 +41,7 @@ export function pop(heap: Heap): Node | null {
 function siftUp(heap, node, i) {
   let index = i;
   while (true) {
+    // 位运算：无符号右移一位
     const parentIndex = (index - 1) >>> 1;
     const parent = heap[parentIndex];
     if (parent !== undefined && compare(parent, node) > 0) {

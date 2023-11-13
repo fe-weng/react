@@ -114,12 +114,15 @@ function legacyCreateRootFromDOMContainer(
   container: Container,
   forceHydrate: boolean,
 ): RootType {
+  // initial mount 阶段 这里是false
   const shouldHydrate =
     forceHydrate || shouldHydrateDueToLegacyHeuristic(container);
   // First clear any existing content.
   if (!shouldHydrate) {
     let warned = false;
     let rootSibling;
+    // 如果 container.lastChild 有值，就赋值，然后去删除这个值，这里的 container 就是 div#root，
+    // 正常这里时没有 lastChild 的
     while ((rootSibling = container.lastChild)) {
       if (__DEV__) {
         if (
@@ -149,6 +152,7 @@ function legacyCreateRootFromDOMContainer(
     }
   }
 
+  // 创建 ReactDomRoot
   return createLegacyRoot(
     container,
     shouldHydrate
@@ -189,7 +193,9 @@ function legacyRenderSubtreeIntoContainer(
   let root: RootType = (container._reactRootContainer: any);
   let fiberRoot;
   if (!root) {
+    // 初始化的时候，container 上面的 _reactRootContainer 还是 undefined
     // Initial mount
+    // 创建 ReactDOMRoot 对象，初始化 react 应用环境
     root = container._reactRootContainer = legacyCreateRootFromDOMContainer(
       container,
       forceHydrate,
@@ -202,7 +208,9 @@ function legacyRenderSubtreeIntoContainer(
         originalCallback.call(instance);
       };
     }
+    // 更新
     // Initial mount should not be batched.
+    // 在这个 unbatchedUpdates 函数里面，更新 executionContext
     unbatchedUpdates(() => {
       updateContainer(children, fiberRoot, parentComponent, callback);
     });

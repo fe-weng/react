@@ -60,6 +60,8 @@ import {
 } from 'react-reconciler/src/ReactRootTags';
 
 function ReactDOMRoot(container: Container, options: void | RootOptions) {
+  // 创建一个 fiberRoot 对象，并挂在在 this._internalRoot 上
+  // 这里的是个构建函数，
   this._internalRoot = createRootImpl(container, ConcurrentRoot, options);
 }
 
@@ -68,12 +70,16 @@ function ReactDOMBlockingRoot(
   tag: RootTag,
   options: void | RootOptions,
 ) {
+  // 创建一个 fiberRoot 对象，并挂在在 this._internalRoot 上
+  // 这里是个构建函数 在实际使用中，this 表示的是 root = container._reactRootContainer 这两个变量
+  // container 就是 ReactDOM.render(xxx, node) 中的 node，或者 ReactDOM.createBlockingRoot(node) 的node
   this._internalRoot = createRootImpl(container, tag, options);
 }
 
 ReactDOMRoot.prototype.render = ReactDOMBlockingRoot.prototype.render = function(
   children: ReactNodeList,
 ): void {
+  // 这里的 root 就是 fiberRoot,由 React.createRoot 生成的，定义下 this 下
   const root = this._internalRoot;
   if (__DEV__) {
     if (typeof arguments[1] === 'function') {
@@ -98,6 +104,7 @@ ReactDOMRoot.prototype.render = ReactDOMBlockingRoot.prototype.render = function
       }
     }
   }
+  // 创建一个 fiberRoot 对象，并挂在在 this._internalRoot 上
   updateContainer(children, root, null, null);
 };
 
@@ -122,7 +129,8 @@ function createRootImpl(
   tag: RootTag,
   options: void | RootOptions,
 ) {
-  // Tag is either LegacyRoot or Concurrent Root
+  // Tag is either LegacyRoot or Concurrent Root or Blocking Root
+  // # region  服务端代码
   const hydrate = options != null && options.hydrate === true;
   const hydrationCallbacks =
     (options != null && options.hydrationOptions) || null;
@@ -131,6 +139,8 @@ function createRootImpl(
       options.hydrationOptions != null &&
       options.hydrationOptions.mutableSources) ||
     null;
+  // # endregion
+  // 创建 fiberRoot
   const root = createContainer(container, tag, hydrate, hydrationCallbacks);
   markContainerAsRoot(root.current, container);
   const containerNodeType = container.nodeType;

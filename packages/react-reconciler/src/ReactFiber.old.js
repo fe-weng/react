@@ -251,6 +251,7 @@ export function resolveLazyComponentTag(Component: Function): WorkTag {
 }
 
 // This is used to create an alternate fiber to do work on.
+// 生成 alternate fiber，用于和 current 做对比的
 export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
   let workInProgress = current.alternate;
   if (workInProgress === null) {
@@ -259,6 +260,7 @@ export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
     // node that we're free to reuse. This is lazily created to avoid allocating
     // extra objects for things that are never updated. It also allow us to
     // reclaim the extra memory if needed.
+    // 初始render 情况下，其实就是把 root.current 的 fiber 再初始化了一个
     workInProgress = createFiber(
       current.tag,
       pendingProps,
@@ -277,6 +279,7 @@ export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
       workInProgress._debugHookTypes = current._debugHookTypes;
     }
 
+    // 将 workInProgress 和 current 通过 alternate 互相关联起来
     workInProgress.alternate = current;
     current.alternate = workInProgress;
   } else {
@@ -431,10 +434,13 @@ export function resetWorkInProgress(workInProgress: Fiber, renderLanes: Lanes) {
 export function createHostRootFiber(tag: RootTag): Fiber {
   let mode;
   if (tag === ConcurrentRoot) {
+    // mode = 7
     mode = ConcurrentMode | BlockingMode | StrictMode;
   } else if (tag === BlockingRoot) {
+    // mode = 3
     mode = BlockingMode | StrictMode;
   } else {
+    // mode = 0
     mode = NoMode;
   }
 

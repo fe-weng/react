@@ -100,16 +100,19 @@ const NonIdleLanes = /*                                 */ 0b0000111111111111111
 export const IdleHydrationLane: Lane = /*               */ 0b0001000000000000000000000000000;
 const IdleLanes: Lanes = /*                             */ 0b0110000000000000000000000000000;
 
-export const OffscreenLane: Lane = /*                   */ 0b1000000000000000000000000000000;
+export const OffscreenLane: Lane = /*                    */ 0b1000000000000000000000000000000;
 
 export const NoTimestamp = -1;
 
+// 局部变量，不对外保罗
 let currentUpdateLanePriority: LanePriority = NoLanePriority;
 
+// 获取当前更新队列优先级
 export function getCurrentUpdateLanePriority(): LanePriority {
   return currentUpdateLanePriority;
 }
 
+// 设置当前更新队列优先级
 export function setCurrentUpdateLanePriority(newLanePriority: LanePriority) {
   currentUpdateLanePriority = newLanePriority;
 }
@@ -193,6 +196,7 @@ function getHighestPriorityLanes(lanes: Lanes | Lane): Lanes {
   return lanes;
 }
 
+// 将 schedulerPriority 的优先级转化成 Lane 的优先级
 export function schedulerPriorityToLanePriority(
   schedulerPriorityLevel: ReactPriorityLevel,
 ): LanePriority {
@@ -575,13 +579,29 @@ export function findRetryLane(wipLanes: Lanes): Lane {
   return lane;
 }
 
+/**
+ * @param lanes
+ * @returns {number}
+ * 分离出最高优先级
+ * -lanes 是 lanes 的补码（将原码所有位取反，1变成0，0变成1，然后末位+1）
+ * lanes & lanes 返回的就是一个只有最右边一个 1 的二进制数，表示最高优先级
+ * React 中位数越低的1，优先级越高
+ */
 function getHighestPriorityLane(lanes: Lanes) {
   return lanes & -lanes;
 }
 
+/**
+ * @param lanes
+ * @returns {Lanes|number}
+ * 分离出最低优先级
+ * clz32(lanes) 返回的是一个数字在转换成32无符号整数的二进制形式后，前导0的个数
+ */
 function getLowestPriorityLane(lanes: Lanes): Lane {
   // This finds the most significant non-zero bit.
+  // index 就是二进制中最高位的 1所在，优先级最低
   const index = 31 - clz32(lanes);
+  // 运用左移，转化成二级制形式
   return index < 0 ? NoLanes : 1 << index;
 }
 

@@ -244,11 +244,14 @@ export function createContainer(
   hydrate: boolean,
   hydrationCallbacks: null | SuspenseHydrationCallbacks,
 ): OpaqueRoot {
+  // 创建 fiberRoot
   return createFiberRoot(containerInfo, tag, hydrate, hydrationCallbacks);
 }
 
 export function updateContainer(
+  // 这里的 element 已经转化为 ReactNode 的虚拟dom对象,(初始根元素渲染的时候，就是 render 里面传的 component)
   element: ReactNodeList,
+  // 容器对应生成的 fiberRoot
   container: OpaqueRoot,
   parentComponent: ?React$Component<any, any>,
   callback: ?Function,
@@ -256,7 +259,9 @@ export function updateContainer(
   if (__DEV__) {
     onScheduleRoot(container, element);
   }
+  // current 在初始render 时，对应的 hostRootFiber 节点
   const current = container.current;
+  // 事件发生的时间戳，用来优先级判断
   const eventTime = requestEventTime();
   if (__DEV__) {
     // $FlowExpectedError - jest isn't a global, and isn't recognized outside of tests
@@ -265,12 +270,14 @@ export function updateContainer(
       warnIfNotScopedWithMatchingAct(current);
     }
   }
+  // 根据当前时间 创建一个 update 优先级
   const lane = requestUpdateLane(current);
 
   if (enableSchedulingProfiler) {
     markRenderScheduled(lane);
   }
 
+  // 判断是否有context 存在
   const context = getContextForSubtree(parentComponent);
   if (container.context === null) {
     container.context = context;
@@ -295,9 +302,11 @@ export function updateContainer(
     }
   }
 
+  // lane 被用于创建 update 对象，
   const update = createUpdate(eventTime, lane);
   // Caution: React DevTools currently depends on this property
   // being called "element".
+  // 将要更新的元素加入到 update 单
   update.payload = {element};
 
   callback = callback === undefined ? null : callback;
@@ -314,6 +323,7 @@ export function updateContainer(
     update.callback = callback;
   }
 
+  // 加入 fiber.updateQueue.pending 队列，将当前要
   enqueueUpdate(current, update);
   scheduleUpdateOnFiber(current, lane, eventTime);
 
@@ -335,6 +345,7 @@ export {
 };
 
 export function getPublicRootInstance(
+  // 这里的 container 是 FiberRoot
   container: OpaqueRoot,
 ): React$Component<any, any> | PublicInstance | null {
   const containerFiber = container.current;
@@ -459,7 +470,7 @@ export function findHostInstanceWithNoPortals(
   return hostFiber.stateNode;
 }
 
-let shouldSuspendImpl = fiber => false;
+let shouldSuspendImpl = (fiber) => false;
 
 export function shouldSuspend(fiber: Fiber): boolean {
   return shouldSuspendImpl(fiber);
@@ -686,7 +697,7 @@ if (__DEV__) {
     scheduleUpdateOnFiber(fiber, SyncLane, NoTimestamp);
   };
 
-  setSuspenseHandler = (newShouldSuspendImpl: Fiber => boolean) => {
+  setSuspenseHandler = (newShouldSuspendImpl: (Fiber) => boolean) => {
     shouldSuspendImpl = newShouldSuspendImpl;
   };
 }
